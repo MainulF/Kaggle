@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building a Decision Tree in C++</title>
+    <style>
+        :root {
+            --blue: #2980b9;
+            --light-blue: #d6eaf8;
+            --green: #27ae60;
+            --light-green: #d5f5e3;
+            --orange: #e67e22;
+            --light-orange: #fdebd0;
+            --code-bg: #f8f8f8;
+            --border: #ddd;
+            --dark: #2c3e50;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', Verdana, Geneva, sans-serif;
+            color: var(--dark);
+            line-height: 1.75;
+            max-width: 880px;
+            margin: 0 auto;
+            padding: 28px 24px;
+            background: #fff;
+        }
+
+        h1 {
+            font-size: 1.9em;
+            color: #1a252f;
+            border-bottom: 3px solid var(--blue);
+            padding-bottom: 12px;
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 0.95em;
+            margin-bottom: 28px;
+        }
+
+        h2 {
+            font-size: 1.25em;
+            color: #1a252f;
+            margin-top: 44px;
+            margin-bottom: 14px;
+            padding: 9px 14px;
+            background: #eaf2f8;
+            border-left: 5px solid var(--blue);
+        }
+
+        h3 {
+            font-size: 1.05em;
+            color: #2c3e50;
+            margin-top: 22px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 4px;
+        }
+
+        p { margin-bottom: 13px; }
+
+        code {
+            font-family: 'Courier New', Courier, monospace;
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 1px 5px;
+            font-size: 0.88em;
+        }
+
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 6px;
+            padding: 18px 20px;
+            overflow-x: auto;
+            margin: 14px 0 22px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875em;
+            line-height: 1.65;
+        }
+
+        pre code {
+            background: none;
+            border: none;
+            padding: 0;
+            font-size: inherit;
+            color: inherit;
+        }
+
+        .box {
+            margin: 16px 0 20px;
+            padding: 14px 18px;
+            border-radius: 4px;
+            border-left: 5px solid;
+        }
+
+        .box-title {
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .note  { background: var(--light-blue);   border-color: var(--blue);   }
+        .note  .box-title { color: var(--blue);   }
+
+        .tip   { background: var(--light-green);  border-color: var(--green);  }
+        .tip   .box-title { color: var(--green);  }
+
+        .warning { background: var(--light-orange); border-color: var(--orange); }
+        .warning .box-title { color: var(--orange); }
+
+        ol, ul { padding-left: 26px; margin-bottom: 13px; }
+        li { margin-bottom: 7px; }
+
+        /* Numbered step list with blue circles */
+        .steps { counter-reset: step; list-style: none; padding-left: 0; }
+        .steps > li {
+            counter-increment: step;
+            padding-left: 40px;
+            position: relative;
+            margin-bottom: 12px;
+        }
+        .steps > li::before {
+            content: counter(step);
+            position: absolute;
+            left: 0; top: 3px;
+            background: var(--blue);
+            color: white;
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.72em;
+            font-weight: bold;
+        }
+
+        /* Sub-steps inside a .steps li */
+        .steps > li > ol {
+            margin-top: 8px;
+            list-style-type: lower-alpha;
+            padding-left: 22px;
+        }
+
+        /* Signature block — dark background, syntax colours */
+        .sig {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 6px;
+            padding: 16px 20px;
+            margin: 12px 0 18px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875em;
+            line-height: 1.8;
+        }
+        .kw   { color: #569cd6; }
+        .ty   { color: #4ec9b0; }
+        .par  { color: #9cdcfe; }
+        .cmt  { color: #6a9955; }
+        .num  { color: #b5cea8; }
+
+        .toc {
+            background: #f8f9fa;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 18px 24px;
+            margin-bottom: 36px;
+            display: inline-block;
+            min-width: 320px;
+        }
+        .toc h3 { margin-top: 0; margin-bottom: 10px; border: none; font-size: 1em; }
+        .toc ol { margin-bottom: 0; }
+        .toc a  { color: var(--blue); text-decoration: none; }
+        .toc a:hover { text-decoration: underline; }
+
+        hr {
+            border: none;
+            border-top: 1px solid #e0e0e0;
+            margin: 36px 0;
+        }
+
+        .sec-num { color: var(--blue); }
+
+        /* Formula display */
+        .formula {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 12px 18px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            margin: 12px 0 18px;
+            text-align: center;
+            letter-spacing: 0.03em;
+        }
+
+        footer {
+            margin-top: 48px;
+            color: #999;
+            font-size: 0.82em;
+            border-top: 1px solid #eee;
+            padding-top: 16px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Building a Decision Tree in C++</h1>
+<p class="subtitle">A complete, step-by-step guide. Read sections in order — each one builds on the last.</p>
+
+<div class="toc">
+    <h3>Table of Contents</h3>
+    <ol>
+        <li><a href="#overview">What We Are Building</a></li>
+        <li><a href="#node">The Node Structure</a></li>
+        <li><a href="#gini">Gini Impurity</a></li>
+        <li><a href="#weighted-gini">Weighted Gini</a></li>
+        <li><a href="#split-result">The SplitResult Helper</a></li>
+        <li><a href="#split-data">Splitting the Data</a></li>
+        <li><a href="#best-split">Finding the Best Split</a></li>
+        <li><a href="#leaf">Leaf Prediction</a></li>
+        <li><a href="#build-tree">Building the Tree Recursively</a></li>
+        <li><a href="#public-api">The Public Interface</a></li>
+        <li><a href="#skeleton">Full Class Skeleton</a></li>
+    </ol>
+</div>
+
+
+<!-- ================================================================ -->
+<h2 id="overview"><span class="sec-num">1.</span> What We Are Building</h2>
+
+<p>
+    A <strong>Decision Tree</strong> classifies samples by asking a series of yes/no questions about feature values.
+    Each question has the form: <em>"Is feature[j] &le; threshold?"</em>
+    Samples that answer yes travel left; samples that answer no travel right.
+    This continues until a sample reaches a <strong>leaf node</strong>, which outputs the final prediction.
+</p>
+
+<div class="note">
+    <div class="box-title">Key Insight</div>
+    A decision tree is a binary tree. Internal nodes store split rules. Leaf nodes store predictions.
+    <strong>Building</strong> the tree = choosing the best splits recursively.
+    <strong>Predicting</strong> = walking from the root to a leaf.
+</div>
+
+<p>Here is the overall build order you will follow in this guide:</p>
+<ol>
+    <li>Define a <code>Node</code> struct to hold split rules and child pointers.</li>
+    <li>Implement <code>gini()</code> to measure how mixed a set of labels is.</li>
+    <li>Implement <code>weightedGini()</code> to score candidate splits.</li>
+    <li>Implement <code>bestSplit()</code> to search all features and thresholds.</li>
+    <li>Implement <code>buildTree()</code> to recursively grow the tree.</li>
+    <li>Implement <code>fit()</code> and <code>predict()</code> as the public interface.</li>
+</ol>
+
+
+<!-- ================================================================ -->
+<hr>
+<h2 id="node"><span class="sec-num">2.</span> The Node Structure</h2>
+
+<p>
+    A <code>Node</code> is the single unit the tree is made of. Every node is either an
+    <strong>internal node</strong> (stores a split rule) or a <strong>leaf node</strong>
+    (stores a final prediction). One struct handles both roles.
+</p>
+
+<h3>What an internal node needs</h3>
+<ul>
+    <li><strong>feature_index</strong> — which column of the data matrix to split on (e.g., column 2).</li>
+    <li><strong>threshold</strong> — the value to compare against (e.g., age &le; 30.5).</li>
+    <li><strong>left</strong> — pointer to the child that receives samples where <code>feature &le; threshold</code>.</li>
+    <li><strong>right</strong> — pointer to the child that receives samples where <code>feature &gt; threshold</code>.</li>
+</ul>
+
+<h3>What a leaf node needs</h3>
+<ul>
+    <li><strong>prediction</strong> — the class label to output for any sample that reaches this leaf.</li>
+    <li><strong>is_leaf</strong> — a boolean flag so traversal code knows to stop here.</li>
+</ul>
+
+<div class="warning">
+    <div class="box-title">Memory Management</div>
+    Use <code>std::unique_ptr&lt;Node&gt;</code> for children, <strong>not raw pointers</strong>.
+    <code>unique_ptr</code> owns the child and destroys it automatically when the parent is destroyed.
+    This means you never need to write a destructor for the tree — the entire tree cleans itself up
+    when <code>root_</code> goes out of scope.
+</div>
+
+<h3>Definition</h3>
+
+<div class="sig">
+<span class="kw">struct</span> <span class="ty">Node</span> {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">int</span>    <span class="par">feature_index</span> = -<span class="num">1</span>;&nbsp;&nbsp;&nbsp;<span class="cmt">// which feature column to test</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">double</span> <span class="par">threshold</span>     = <span class="num">0.0</span>;&nbsp;&nbsp;<span class="cmt">// value to compare against</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">double</span> <span class="par">prediction</span>    = <span class="num">0.0</span>;&nbsp;&nbsp;<span class="cmt">// used only by leaf nodes</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">bool</span>   <span class="par">is_leaf</span>       = <span class="kw">false</span>;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;std::<span class="ty">unique_ptr</span>&lt;<span class="ty">Node</span>&gt; <span class="par">left</span>;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;std::<span class="ty">unique_ptr</span>&lt;<span class="ty">Node</span>&gt; <span class="par">right</span>;<br>
+};
+</div>
+
+<div class="tip">
+    <div class="box-title">Best Practice</div>
+    Place this struct <strong>inside</strong> the <code>DecisionTree</code> class as a private nested struct.
+    It is an implementation detail — callers should never see or touch a raw <code>Node</code>.
+    Giving all members default values means a freshly constructed node is always in a valid state.
+</div>
+
+
+<!-- ================================================================ -->
+<hr>
+<h2 id="gini"><span class="sec-num">3.</span> Gini Impurity</h2>
+
+<p>
+    Gini impurity measures how mixed a set of labels is.
+    A value of <code>0.0</code> means all labels are the same class (a <em>pure</em> node).
+    Higher values mean more mixing. For binary classification the maximum is <code>0.5</code>.
+</p>
+
+<h3>Formula</h3>
+<p>Let <em>p<sub>i</sub></em> be the proportion of class <em>i</em> in the label set:</p>
+<div class="formula">G = 1 &minus; &Sigma;(p<sub>i</sub>&sup2;)</div>
+
+<p>
+    For example, if a node has 6 samples of class 0 and 4 of class 1:
+    p<sub>0</sub> = 0.6, p<sub>1</sub> = 0.4 &rarr; G = 1 &minus; (0.36 + 0.16) = <strong>0.48</strong>.
+    A perfectly pure node: p<sub>0</sub> = 1.0 &rarr; G = 1 &minus; 1.0 = <strong>0.0</strong>.
+</p>
+
+<h3>Function Signature</h3>
+
+<div class="sig">
+<span class="kw">static double</span> <span class="ty">gini</span>(<span class="kw">const</span> std::vector&lt;<span class="kw">double</span>&gt;&amp; <span class="par">labels</span>);
+</div>
+
+<p>
+    It is <code>static</code> because it only depends on its argument — no tree state is needed.
+</p>
+
+<h3>Steps to Implement</h3>
+<ol class="steps">
+    <li>If <code>labels</code> is empty, return <code>0.0</code>.</li>
+    <li>
+        Count the number of occurrences of each unique label.
+        A <code>std::map&lt;double, int&gt;</code> is a natural fit: iterate <code>labels</code> and
+        increment <code>counts[label]</code> for each element.
+    </li>
+    <li>
+        Compute <code>n = labels.size()</code> (store as <code>double</code> to avoid integer division later).
+    </li>
+    <li>
+        For each entry in your counts map, compute <code>p = count / n</code>, then accumulate
+        <code>sum += p * p</code>.
+    </li>
+    <li>Return <code>1.0 - sum</code>.</li>
+</ol>
+
+<div class="warning">
+    <div class="box-title">Fix Your Current Code</div>
+    Your current early-return condition — <code>all_of(x &gt; 0)</code> — is logically wrong.
+    It returns <code>0.0</code> whenever all values are positive, which is almost always true for class
+    labels. The correct early exit is when the node is <strong>pure</strong>: all labels are equal.
+    You can check this with <code>std::ranges::all_of(labels, [&amp;](double x){ return x == labels[0]; })</code>.
+    <br><br>
+    Also: you do not need to sort the data for Gini <em>impurity</em>.
+    Sorting is used for the Gini <em>coefficient</em> (an economics measure) — a different concept.
+    Remove the sort.
+</div>
+
+
+<!-- ================================================================ -->
+<hr>
+<h2 id="weighted-gini"><span class="sec-num">4.</span> Weighted Gini</h2>
+
+<p>
+    When you test a candidate split, you end up with two child groups: left and right.
+    The quality of the split is the <strong>weighted average</strong> of their Gini scores,
+    weighted by the number of samples in each group.
+</p>
+
+<p>
+    A 999/1 split should be judged very differently from a 500/500 split, even if the raw
+    Gini scores are the same. Weighting by size captures this.
+</p>
+
+<h3>Formula</h3>
+<div class="formula">
+    weighted_gini = (|left| / |total|) &times; gini(left) + (|right| / |total|) &times; gini(right)
+</div>
+
+<h3>Function Signature</h3>
+
+<div class="sig">
+<span class="kw">static double</span> <span class="ty">weightedGini</span>(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">const</span> std::vector&lt;<span class="kw">double</span>&gt;&amp; <span class="par">left_labels</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">const</span> std::vector&lt;<span class="kw">double</span>&gt;&amp; <span class="par">right_labels</span><br>
+);
+</div>
+
+<h3>Steps to Implement</h3>
+<ol class="steps">
+    <li>
+        Compute <code>n_total = (double)(left_labels.size() + right_labels.size())</code>.
+        Guard: if <code>n_total == 0</code>, return <code>0.0</code>.
+    </li>
+    <li>
+        Compute <code>w_left  = left_labels.size()  / n_total</code>.
+    </li>
+    <li>
+        Compute <code>w_right = right_labels.size() / n_total</code>.
+    </li>
+    <li>
+        Return <code>w_left * gini(left_labels) + w_right * gini(right_labels)</code>.
+    </li>
+</ol>
+
+<div class="note">
+    <div class="box-title">Note</div>
+    Lower weighted Gini = better split. A split that produces two pure children has
+    weighted Gini = 0.0 — the best possible score.
+</div>
+
+
+<!-- ================================================================ -->
+<hr>
+<h2 id="split-result"><span class="sec-num">5.</span> The SplitResult Helper</h2>
+
+<p>
+    <code>bestSplit()</code> searches through many candidate splits and needs to return the winner.
+    Bundle the result in a small struct so the return type is self-documenting and easy to work with.
+</p>
+
+<div class="sig">
+<span class="kw">struct</span> <span class="ty">SplitResult</span> {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">int</span>    <span class="par">feature_index</span> = -<span class="num">1</span>;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">double</span> <span class="par">threshold</span>     = <span class="num">0.0</span>;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">double</span> <span class="par">score</span>         = <span class="num">1.0</span>;&nbsp;&nbsp;<span class="cmt">// weighted Gini; lower is better</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">bool</span>   <span class="par">valid</span>         = <span class="kw">false</span>;<span class="cmt">// false = no useful split found</span><br>
+};
+</div>
+
+<p>
+    <code>score</code> is initialised to <code>1.0</code> (the theoretical maximum) so that any
+    real improvement will be detected by a simple <code>&lt;</code> comparison.
+    <code>valid = false</code> is your sentinel for "we could not find any split for this node."
+</p>
+
+<p>Like <code>Node</code>, place this struct inside the <code>DecisionTree</code> class as a private nested type.</p>
+
+
+<!-- ================================================================ -->
+<hr>
+<h2 id="split-data"><span class="sec-num">6.</span> Splitting the Data</h2>
+
+<p>
+    Before evaluating any split, you need a helper that partitions rows of <code>X</code>
+    (and their corresponding labels <code>y</code>) into two groups based on a feature and a threshold.
+</p>
+
+<h3>Rule</h3>
+<ul>
+    <li>Row <em>i</em> goes <strong>left</strong> if <code>X[i][feature_index] &le; threshold</code>.</li>
+    <li>Row <em>i</em> goes <strong>right</strong> if <code>X[i][feature_index] &gt; threshold</code>.</li>
+</ul>
+
+<h3>Function Signatures</h3>
+
+<div class="sig">
+<span class="cmt">// Returns the subset of (X, y) where feature &le; threshold</span><br>
+<span class="kw">static</span> std::pair&lt;std::vector&lt;std::vector&lt;<span class="kw">double</span>&gt;&gt;, std::vector&lt;<span class="kw">double</span>&gt;&gt;<br>
+<span class="ty">splitLeft</span>(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">const</span> std::vector&lt;std::vector&lt;<span class="kw">double</span>&gt;&gt;&amp; <span class="par">X</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">const</span> std::vector&lt;<span class="kw">double</span>&gt;&amp;               <span class="par">y</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">int</span>                                        <span class="par">feature_index</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">double</span>                                     <span class="par">threshold</span><br>
+);<br><br>
+<span class="cmt">// Same, but for feature &gt; threshold</span><br>
+<span class="kw">static</span> std::pair&lt;std::vector&lt;std::vector&lt;<span class="kw">double</span>&gt;&gt;, std::vector&lt;<span class="kw">double</span>&gt;&gt;<br>
+<span class="ty">splitRight</span>(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">const</span> std::vector&lt;std::vector&lt;<span class="kw">double</span>&gt;&gt;&amp; <span class="par">X</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">const</span> std::vector&lt;<span class="kw">double</span>&gt;&amp;               <span class="par">y</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">int</span>                                        <span class="par">feature_index</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">double</span>                                     <span class="par">threshold</span><br>
+);
+</div>
+
+<h3>Steps to Implement (shown for <code>splitLeft</code>; <code>splitRight</code> is a one-character change)</h3>
+<ol class="steps">
+    <li>Create empty vectors <code>X_out</code> and <code>y_out</code>.</li>
+    <li>
+        Loop over every index <code>i</code> from <code>0</code> to <code>X.size()</code>.
+    </li>
+    <li>
+        If <code>X[i][feature_index] &le; threshold</code>, append <code>X[i]</code> to <code>X_out</code>
+        and <code>y[i]</code> to <code>y_out</code>.
+    </li>
+    <li>Return <code>std::make_pair(X_out, y_out)</code>.</li>
+</ol>
+
+<div class="tip">
+    <div class="box-title">Design Tip</div>
+    You can merge both functions into one that fills left and right in the same loop, avoiding iterating
+    the data twice per candidate threshold. Either approach is correct — choose whichever is clearest to you.
+</div>
+
+
+<!-- ================================================================ -->
+<hr>
+<h2 id="best-split"><span class="sec-num">7.</span> Finding the Best Split</h2>
+
+<p>
+    This is the core of the learning algorithm. For every feature and every candidate threshold,
+    evaluate the resulting split with <code>weightedGini()</code> and track the best one seen so far.
+</p>
+
+<h3>How candidate thresholds are chosen</h3>
+<p>
+    For a given feature <em>j</em>, collect all values that appear in column <em>j</em> of <code>X</code>.
+    Sort them and remove duplicates. For each pair of consecutive unique values <code>(a, b)</code>,
+    use their midpoint <code>(a + b) / 2.0</code> as a threshold candidate. This guarantees you test
+    every meaningful binary split for that feature.
+</p>
+
+<h3>Function Signature</h3>
+
+<div class="sig">
+<span class="kw">static</span> <span class="ty">SplitResult</span> <span class="ty">bestSplit</span>(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">const</span> std::vector&lt;std::vector&lt;<span class="kw">double</span>&gt;&gt;&amp; <span class="par">X</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">const</span> std::vector&lt;<span class="kw">double</span>&gt;&amp;               <span class="par">y</span><br>
+);
+</div>
+
+<h3>Steps to Implement</h3>
+<ol class="steps">
+    <li>Create a default <code>SplitResult best</code> (score = 1.0, valid = false).</li>
+    <li>Determine the number of features: <code>n_features = X[0].size()</code>.</li>
+    <li>
+        For each feature index <code>j</code> in range <code>[0, n_features)</code>:
+        <ol>
+            <li>Extract every value in column <code>j</code> into a temporary vector.</li>
+            <li>Sort it, then use <code>std::unique</code> to remove duplicates.</li>
+            <li>
+                For each consecutive pair of unique values <code>(vals[k], vals[k+1])</code>,
+                compute <code>threshold = (vals[k] + vals[k+1]) / 2.0</code>.
+            </li>
+            <li>Call <code>splitLeft</code> and <code>splitRight</code> to get the two label subsets.</li>
+            <li>Skip this threshold if either subset is empty (no meaningful split).</li>
+            <li>Compute <code>score = weightedGini(left_labels, right_labels)</code>.</li>
+            <li>
+                If <code>score &lt; best.score</code>, update <code>best</code>:
+                set <code>feature_index = j</code>, <code>threshold</code>, <code>score</code>,
+                and <code>valid = true</code>.
+            </li>
+        </ol>
+    </li>
+    <li>Return <code>best</code>.</li>
+</ol>
+
+<div class="note">
+    <div class="box-title">Time Complexity</div>
+    This is O(n&sup2; &times; f) — for every feature, you try up to n thresholds, each requiring
+    an O(n) partition pass. For the Titanic dataset this is fast enough. For larger datasets,
+    Random Forests speed this up by randomly subsampling features at each split.
+</div>
+
+
+<!-- ================================================================ -->
+<hr>
+<h2 id="leaf"><span class="sec-num">8.</span> Leaf Prediction</h2>
+
+<p>
+    When a node cannot or should not be split further, it becomes a leaf. Its job is to output
+    a single prediction for every sample that reaches it. For classification, this is a
+    <strong>majority vote</strong>: the most common class label in the node's training samples.
+</p>
+
+<h3>Function Signature</h3>
+
+<div class="sig">
+<span class="kw">static double</span> <span class="ty">leafPrediction</span>(<span class="kw">const</span> std::vector&lt;<span class="kw">double</span>&gt;&amp; <span class="par">labels</span>);
+</div>
+
+<h3>Steps to Implement</h3>
+<ol class="steps">
+    <li>Use a <code>std::map&lt;double, int&gt;</code> to count occurrences of each label — same approach as in <code>gini()</code>.</li>
+    <li>
+        Use <code>std::max_element</code> on the map. You will need a custom comparator that
+        compares the <code>.second</code> (count) of each map entry.
+    </li>
+    <li>Return the <code>.first</code> (label) of the winning entry.</li>
+</ol>
+
+
+<!-- ================================================================ -->
+<hr>
+<h2 id="build-tree"><span class="sec-num">9.</span> Building the Tree Recursively</h2>
+
+<p>
+    This function is the engine of the whole algorithm. It receives a subset of the data,
+    decides whether to create a leaf or an internal node, and — in the recursive case —
+    calls itself twice to grow the subtrees.
+</p>
+
+<h3>Function Signature</h3>
+
+<div class="sig">
+std::unique_ptr&lt;<span class="ty">Node</span>&gt; <span class="ty">buildTree</span>(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;std::vector&lt;std::vector&lt;<span class="kw">double</span>&gt;&gt; <span class="par">X</span>,&nbsp;&nbsp;<span class="cmt">// by value — each call owns its slice</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;std::vector&lt;<span class="kw">double</span>&gt;               <span class="par">y</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">int</span>                               <span class="par">depth</span><br>
+);
+</div>
+
+<div class="note">
+    <div class="box-title">Why pass X and y by value?</div>
+    Each recursive call works on its own slice of data. Passing by value makes ownership explicit
+    and avoids subtle bugs where two calls share the same vector. The copies are going to happen
+    anyway because each subtree sees a different subset of rows.
+</div>
+
+<h3>Step A — Base Cases (when to make a leaf)</h3>
+
+<p>Check these conditions <strong>before</strong> calling <code>bestSplit</code>. If any is true, create and return a leaf node.</p>
+
+<ol class="steps">
+    <li><code>depth &ge; max_depth_</code> — the tree has reached its maximum allowed depth.</li>
+    <li><code>y.size() &lt; (size_t)min_samples_</code> — too few samples to justify a split.</li>
+    <li><code>gini(y) == 0.0</code> — the node is already pure; splitting would gain nothing.</li>
+    <li>
+        <code>bestSplit(X, y).valid == false</code> — no split improves purity
+        (all features have only one unique value in this subset).
+    </li>
+</ol>
+
+<p>
+    To make a leaf: create a <code>std::make_unique&lt;Node&gt;()</code>, set <code>is_leaf = true</code>,
+    set <code>prediction = leafPrediction(y)</code>, and return it.
+</p>
+
+<div class="warning">
+    <div class="box-title">Order Matters</div>
+    Always check cases 1–3 <em>before</em> calling <code>bestSplit()</code>, because
+    <code>bestSplit</code> accesses <code>X[0].size()</code>. If <code>X</code> is empty that is
+    undefined behavior. Checking <code>y.size()</code> first protects you.
+</div>
+
+<h3>Step B — Recursive Case</h3>
+
+<ol class="steps">
+    <li>
+        Call <code>SplitResult best = bestSplit(X, y)</code>.
+        If <code>!best.valid</code>, fall through to making a leaf (same as base case 4 above).
+    </li>
+    <li>
+        Call <code>splitLeft</code> and <code>splitRight</code> using <code>best.feature_index</code>
+        and <code>best.threshold</code> to partition <code>X</code> and <code>y</code>.
+    </li>
+    <li>
+        Create a new internal node via <code>std::make_unique&lt;Node&gt;()</code>.
+        Set its <code>feature_index</code> and <code>threshold</code> from <code>best</code>.
+        Leave <code>is_leaf = false</code>.
+    </li>
+    <li>
+        Set <code>node-&gt;left  = buildTree(X_left,  y_left,  depth + 1)</code>.
+    </li>
+    <li>
+        Set <code>node-&gt;right = buildTree(X_right, y_right, depth + 1)</code>.
+    </li>
+    <li>Return the node.</li>
+</ol>
+
+
+<!-- ================================================================ -->
+<hr>
+<h2 id="public-api"><span class="sec-num">10.</span> The Public Interface</h2>
+
+<h3>Constructor</h3>
+
+<div class="sig">
+<span class="ty">DecisionTree</span>(<span class="kw">int</span> <span class="par">max_depth</span> = <span class="num">5</span>, <span class="kw">int</span> <span class="par">min_samples</span> = <span class="num">2</span>);
+</div>
+
+<p>
+    Store the arguments into <code>max_depth_</code> and <code>min_samples_</code>.
+    <code>root_</code> will be <code>nullptr</code> by default (since <code>unique_ptr</code> default-constructs to null).
+</p>
+
+<h3>fit()</h3>
+
+<div class="sig">
+<span class="kw">void</span> <span class="ty">fit</span>(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">const</span> std::vector&lt;std::vector&lt;<span class="kw">double</span>&gt;&gt;&amp; <span class="par">X</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">const</span> std::vector&lt;<span class="kw">double</span>&gt;&amp;               <span class="par">y</span><br>
+);
+</div>
+
+<p>
+    One line: <code>root_ = buildTree(X, y, 0)</code>.
+    The recursion in <code>buildTree</code> handles everything from here.
+</p>
+
+<h3>traverse() — private helper</h3>
+
+<div class="sig">
+<span class="kw">double</span> <span class="ty">traverse</span>(<span class="kw">const</span> <span class="ty">Node</span>* <span class="par">node</span>, <span class="kw">const</span> std::vector&lt;<span class="kw">double</span>&gt;&amp; <span class="par">sample</span>) <span class="kw">const</span>;
+</div>
+
+<h3>Steps to Implement traverse()</h3>
+<ol class="steps">
+    <li>If <code>node-&gt;is_leaf</code> is true, return <code>node-&gt;prediction</code>.</li>
+    <li>
+        Check <code>sample[node-&gt;feature_index] &le; node-&gt;threshold</code>.
+        If true, recurse: <code>return traverse(node-&gt;left.get(), sample)</code>.
+    </li>
+    <li>
+        Otherwise, recurse right: <code>return traverse(node-&gt;right.get(), sample)</code>.
+    </li>
+</ol>
+
+<h3>predict() — public</h3>
+
+<div class="sig">
+<span class="kw">double</span> <span class="ty">predict</span>(<span class="kw">const</span> std::vector&lt;<span class="kw">double</span>&gt;&amp; <span class="par">sample</span>) <span class="kw">const</span>;
+</div>
+
+<p>
+    Assert that <code>root_</code> is not null (i.e., <code>fit()</code> was called first), then
+    return <code>traverse(root_.get(), sample)</code>.
+</p>
+
+
+<!-- ================================================================ -->
+<hr>
+<h2 id="skeleton"><span class="sec-num">11.</span> Full Class Skeleton</h2>
+
+<p>
+    Here is the complete skeleton with all types and signatures in place but no function bodies.
+    This is what your header should look like when all the pieces are wired together.
+    Fill each body one function at a time, in the order listed in the
+    <a href="#overview">recommended build order</a>.
+</p>
+
+<pre><code>#pragma once
+#include &lt;vector&gt;
+#include &lt;map&gt;
+#include &lt;memory&gt;
+#include &lt;algorithm&gt;
+#include &lt;numeric&gt;
+#include &lt;cassert&gt;
+
+class DecisionTree {
+public:
+    DecisionTree(int max_depth = 5, int min_samples = 2);
+
+    void   fit(const std::vector&lt;std::vector&lt;double&gt;&gt;&amp; X,
+               const std::vector&lt;double&gt;&amp; y);
+
+    double predict(const std::vector&lt;double&gt;&amp; sample) const;
+
+private:
+    // ── nested types ──────────────────────────────────────────────────
+    struct Node {
+        int    feature_index = -1;
+        double threshold     = 0.0;
+        double prediction    = 0.0;
+        bool   is_leaf       = false;
+        std::unique_ptr&lt;Node&gt; left;
+        std::unique_ptr&lt;Node&gt; right;
+    };
+
+    struct SplitResult {
+        int    feature_index = -1;
+        double threshold     = 0.0;
+        double score         = 1.0;   // weighted Gini; lower is better
+        bool   valid         = false;
+    };
+
+    // ── hyperparameters ───────────────────────────────────────────────
+    int max_depth_;
+    int min_samples_;
+
+    // ── tree state ────────────────────────────────────────────────────
+    std::unique_ptr&lt;Node&gt; root_;
+
+    // ── private helpers (implement in this order) ─────────────────────
+    static double gini(const std::vector&lt;double&gt;&amp; labels);
+
+    static double weightedGini(const std::vector&lt;double&gt;&amp; left_labels,
+                               const std::vector&lt;double&gt;&amp; right_labels);
+
+    static std::pair&lt;std::vector&lt;std::vector&lt;double&gt;&gt;, std::vector&lt;double&gt;&gt;
+    splitLeft(const std::vector&lt;std::vector&lt;double&gt;&gt;&amp; X,
+              const std::vector&lt;double&gt;&amp; y,
+              int feature_index, double threshold);
+
+    static std::pair&lt;std::vector&lt;std::vector&lt;double&gt;&gt;, std::vector&lt;double&gt;&gt;
+    splitRight(const std::vector&lt;std::vector&lt;double&gt;&gt;&amp; X,
+               const std::vector&lt;double&gt;&amp; y,
+               int feature_index, double threshold);
+
+    static double leafPrediction(const std::vector&lt;double&gt;&amp; labels);
+
+    static SplitResult bestSplit(const std::vector&lt;std::vector&lt;double&gt;&gt;&amp; X,
+                                 const std::vector&lt;double&gt;&amp; y);
+
+    std::unique_ptr&lt;Node&gt; buildTree(std::vector&lt;std::vector&lt;double&gt;&gt; X,
+                                    std::vector&lt;double&gt; y,
+                                    int depth);
+
+    double traverse(const Node* node,
+                    const std::vector&lt;double&gt;&amp; sample) const;
+};
+</code></pre>
+
+<div class="tip">
+    <div class="box-title">Recommended Build Order</div>
+    <ol style="margin-bottom: 0;">
+        <li>Implement and manually test <code>gini()</code> with a few hand-crafted vectors.</li>
+        <li>Implement <code>weightedGini()</code>.</li>
+        <li>Implement <code>splitLeft()</code> and <code>splitRight()</code>.</li>
+        <li>Implement <code>leafPrediction()</code>.</li>
+        <li>Implement <code>bestSplit()</code> — it composes all of the above.</li>
+        <li>Implement <code>buildTree()</code> — it composes everything.</li>
+        <li>Wire up <code>fit()</code>, <code>traverse()</code>, and <code>predict()</code>.</li>
+    </ol>
+</div>
+
+<footer>
+    Build bottom-up: get each helper working in isolation before composing them.
+    The tree assembles naturally once the leaf-level functions are solid.
+</footer>
+
+</body>
+</html>
