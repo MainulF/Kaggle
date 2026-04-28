@@ -1,0 +1,987 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DecisionTree.h — a step-by-step walkthrough</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel2: #1d2029;
+    --ink: #e6e8ee;
+    --ink-dim: #a7acb9;
+    --accent: #89b4fa;
+    --accent2: #a6e3a1;
+    --warn: #f9e2af;
+    --bad: #f38ba8;
+    --rule: #2a2f3a;
+    --code-bg: #11141b;
+    --code-border: #242834;
+  }
+  html, body { background: var(--bg); color: var(--ink); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; line-height: 1.65;
+    font-size: 17px;
+  }
+  h1 { font-size: 34px; margin-bottom: 0.2em; }
+  h2 { font-size: 26px; border-bottom: 1px solid var(--rule); padding-bottom: 6px; margin-top: 56px; }
+  h3 { font-size: 20px; margin-top: 32px; color: var(--accent); }
+  h4 { font-size: 17px; margin-top: 22px; color: var(--accent2); }
+  p { margin: 0.8em 0; }
+  code {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 0.88em;
+    line-height: 1.55;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--panel);
+    padding: 12px 16px;
+    margin: 16px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .callout.warn { border-color: var(--warn); }
+  .callout.bad  { border-color: var(--bad); }
+  .callout.good { border-color: var(--accent2); }
+  .callout .label {
+    display: inline-block; font-weight: 600;
+    color: var(--accent); font-size: 0.8em; letter-spacing: 0.05em;
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+  .callout.warn .label { color: var(--warn); }
+  .callout.bad  .label { color: var(--bad); }
+  .callout.good .label { color: var(--accent2); }
+  table {
+    border-collapse: collapse; margin: 12px 0;
+    background: var(--panel); border-radius: 6px; overflow: hidden;
+  }
+  th, td { padding: 8px 14px; border-bottom: 1px solid var(--rule); text-align: left; }
+  th { background: var(--panel2); font-weight: 600; color: var(--accent); }
+  tr:last-child td { border-bottom: none; }
+  ul, ol { padding-left: 1.5em; }
+  li { margin: 4px 0; }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 56px 0 0; }
+  .kbd {
+    background: var(--panel2); border: 1px solid var(--rule);
+    padding: 1px 6px; border-radius: 3px; font-size: 0.85em;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .toc {
+    background: var(--panel); border-radius: 6px;
+    padding: 14px 20px; margin: 24px 0;
+  }
+  .toc ol { margin: 0; }
+  .toc a { color: var(--ink); text-decoration: none; }
+  .toc a:hover { color: var(--accent); }
+  .term { color: var(--accent2); font-weight: 600; }
+  .tree-art {
+    font-family: "JetBrains Mono", monospace;
+    white-space: pre;
+    background: var(--panel);
+    padding: 14px 18px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    color: var(--ink-dim);
+    overflow-x: auto;
+  }
+  .tree-art b { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>DecisionTree.h — a step-by-step walkthrough</h1>
+<p style="color: var(--ink-dim); font-size: 0.95em;">
+  Every line of your current file, explained from the ground up. No assumed background beyond
+  "I can write a <code>for</code> loop." Every term is defined the first time it appears.
+</p>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#problem">The problem we're solving</a></li>
+    <li><a href="#vocab-ml">Vocabulary: data and labels</a></li>
+    <li><a href="#vocab-tree">Vocabulary: the tree itself</a></li>
+    <li><a href="#vocab-cpp">Vocabulary: the C++ bits you'll see</a></li>
+    <li><a href="#file">The file, top to bottom</a></li>
+    <li><a href="#lifecycle">Life of a prediction (end-to-end trace)</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================= -->
+<h2 id="problem">1. The problem we're solving</h2>
+
+<p>
+  Imagine the Titanic dataset. For each passenger we know some facts — age, fare paid,
+  whether they were in first class — and we want to predict whether they survived.
+</p>
+
+<table>
+  <thead>
+    <tr><th>age</th><th>fare</th><th>is_first_class</th><th>→</th><th>survived</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>22</td><td>7.25</td><td>0</td><td>→</td><td>0</td></tr>
+    <tr><td>38</td><td>71.28</td><td>1</td><td>→</td><td>1</td></tr>
+    <tr><td>26</td><td>7.92</td><td>0</td><td>→</td><td>1</td></tr>
+    <tr><td>35</td><td>53.10</td><td>1</td><td>→</td><td>1</td></tr>
+  </tbody>
+</table>
+
+<p>
+  A <span class="term">decision tree</span> is a flowchart of yes/no questions that ends in
+  an answer. For example:
+</p>
+
+<pre class="tree-art"><b>is_first_class &le; 0.5?</b>
+├─ yes → <b>age &le; 24?</b>
+│        ├─ yes → predict 0 (did not survive)
+│        └─ no  → predict 1 (survived)
+└─ no  → predict 1 (survived)</pre>
+
+<p>
+  The tree's job, given a table of training examples, is to <em>figure out these questions
+  and their order by itself</em>. That learning process is what all this code does.
+</p>
+
+<div class="callout">
+  <span class="label">Why a tree?</span>
+  Because it's interpretable and reasonably powerful. You can print the tree and read off
+  exactly why a prediction was made. Random Forests and XGBoost — two of the most common
+  winners on tabular data — are built out of many such trees.
+</div>
+
+<!-- ============================================================= -->
+<h2 id="vocab-ml">2. Vocabulary: data and labels</h2>
+
+<p>Hard-coded in your brain before any code makes sense:</p>
+
+<ul>
+  <li><span class="term">sample</span> (also <em>row</em>, <em>observation</em>, <em>example</em>):
+    one individual thing you have data about. In the table above, one passenger.</li>
+  <li><span class="term">feature</span> (also <em>column</em>, <em>attribute</em>, <em>variable</em>):
+    one piece of information per sample. <code>age</code> is a feature. <code>fare</code> is a feature.
+    A sample has many features.</li>
+  <li><span class="term">label</span> (also <em>target</em>, <em>y</em>, <em>class</em>):
+    the thing we want to predict. For Titanic, <code>survived</code>. There's exactly one label per sample.</li>
+  <li><span class="term">X</span>: the whole table of features. Every row is one sample, every column is one feature.
+    In code: <code>std::vector&lt;std::vector&lt;double&gt;&gt;</code> — a vector of rows, each row a vector of numbers.</li>
+  <li><span class="term">y</span>: the list of labels, one per sample. <code>std::vector&lt;double&gt;</code>.
+    It's flat (1D) because there's just one label per row.</li>
+  <li><span class="term">training</span>: the one-time process of looking at lots of
+    <em>labeled</em> data and learning a tree from it.</li>
+  <li><span class="term">prediction</span> (also <em>inference</em>): using the already-trained tree
+    to guess the label for a <em>new</em> sample whose label we don't know.</li>
+</ul>
+
+<div class="callout good">
+  <span class="label">Anchor</span>
+  <code>X.size()</code> = number of samples (rows).<br>
+  <code>X[0].size()</code> = number of features (columns).<br>
+  <code>X[i][j]</code> = feature <code>j</code> of sample <code>i</code>.<br>
+  <code>y[i]</code> = label of sample <code>i</code>.<br>
+  Always, always <code>X.size() == y.size()</code>.
+</div>
+
+<!-- ============================================================= -->
+<h2 id="vocab-tree">3. Vocabulary: the tree itself</h2>
+
+<ul>
+  <li><span class="term">node</span>: one box in the flowchart. Can be internal or a leaf.</li>
+  <li><span class="term">internal node</span>: a box that asks a question
+    (<code>is feature j &le; threshold?</code>) and has two children.</li>
+  <li><span class="term">leaf</span> (or <em>leaf node</em>): a box at the bottom that
+    gives an answer — no more questions.</li>
+  <li><span class="term">root</span>: the topmost node. Every prediction starts here.</li>
+  <li><span class="term">child</span>: the two nodes that an internal node points to.
+    Traditionally called <code>left_child</code> (the "yes" branch, feature &le; threshold)
+    and <code>right_child</code> (the "no" branch, feature &gt; threshold).</li>
+  <li><span class="term">depth</span>: how many questions deep you are. Root is depth 0,
+    its children are depth 1, and so on. Capping depth prevents the tree from becoming
+    giant and memorizing the training data.</li>
+  <li><span class="term">threshold</span>: the numeric cutoff in a question. For
+    <code>age &le; 24.5?</code>, the threshold is 24.5.</li>
+  <li><span class="term">feature_index</span>: which column the question is about.
+    If <code>age</code> is column 0 and the question is <code>age &le; 24.5?</code>,
+    then <code>feature_index = 0</code>.</li>
+  <li><span class="term">split</span>: the act of partitioning a group of samples in two,
+    based on a <code>(feature_index, threshold)</code> pair.</li>
+  <li><span class="term">impurity</span>: a number that says how mixed-up the labels in a
+    group are. 0 means "all the same class" (pure). Higher means more mixed. Your code
+    uses the <span class="term">Gini</span> impurity.</li>
+</ul>
+
+<!-- ============================================================= -->
+<h2 id="vocab-cpp">4. Vocabulary: the C++ bits you'll see</h2>
+
+<p>
+  Not a C++ course — just the concepts this file actually uses, in the order they appear.
+  Skim and refer back.
+</p>
+
+<h4><code>#pragma once</code></h4>
+<p>
+  A one-liner that says "only include this header once per compilation unit." Prevents
+  the code from being pasted twice, which would cause duplicate definitions.
+</p>
+
+<h4><code>#include &lt;…&gt;</code></h4>
+<p>
+  Copy-paste of another header's contents. <code>&lt;vector&gt;</code> brings in
+  <code>std::vector</code>. <code>&lt;map&gt;</code> brings in <code>std::map</code>. And so on.
+</p>
+
+<h4><code>std::vector&lt;T&gt;</code></h4>
+<p>
+  A dynamically-resizing array of <code>T</code>. <code>std::vector&lt;double&gt;</code>
+  is an array of doubles. <code>std::vector&lt;std::vector&lt;double&gt;&gt;</code> is an
+  array of arrays of doubles — a 2D table.
+</p>
+
+<h4><code>std::map&lt;K, V&gt;</code></h4>
+<p>
+  An ordered dictionary: keys of type <code>K</code> mapping to values of type <code>V</code>.
+  <code>std::map&lt;double, int&gt;</code> means "for each unique double key, store an int."
+  Perfect for counting: <code>counts[label]++</code> adds 1 to the count of that label,
+  creating the entry first if needed.
+</p>
+
+<h4><code>std::unique_ptr&lt;T&gt;</code></h4>
+<p>
+  A pointer that <em>owns</em> what it points to. When the <code>unique_ptr</code> goes
+  out of scope, it automatically deletes the thing. You never call <code>delete</code>.
+  "Unique" means no two <code>unique_ptr</code>s can point at the same object — ownership
+  is single. For a tree, this means: when the root dies, its children die, their children die,
+  the whole subtree cleans itself up.
+</p>
+
+<h4><code>std::make_unique&lt;T&gt;()</code></h4>
+<p>
+  The safe way to create a <code>unique_ptr&lt;T&gt;</code>. <code>std::make_unique&lt;Node&gt;()</code>
+  allocates a new <code>Node</code> and wraps a <code>unique_ptr</code> around it.
+</p>
+
+<h4><code>std::pair&lt;A, B&gt;</code></h4>
+<p>
+  A two-element tuple. Used here as the return type when a function needs to hand back
+  two things at once (the split functions return both the resulting rows and the resulting labels).
+</p>
+
+<h4>References: <code>T&amp;</code> and <code>const T&amp;</code></h4>
+<p>
+  <code>T&amp;</code> means "a reference to a <code>T</code>" — essentially an alias for
+  an existing object, no copy made. <code>const T&amp;</code> means "a read-only alias."
+  Passing large objects like vectors by <code>const T&amp;</code> avoids copies while still
+  preventing accidental modification.
+</p>
+
+<h4><code>static</code> member function</h4>
+<p>
+  A function that belongs to the class but doesn't need an instance to be called.
+  Called as <code>DecisionTree::gini(labels)</code> rather than <code>tree.gini(labels)</code>.
+  Used for utilities that don't read or write member variables (<code>max_depth_</code> etc).
+</p>
+
+<h4><code>auto</code></h4>
+<p>
+  "Let the compiler figure out the type." <code>auto size = labels.size();</code> — the
+  compiler knows <code>labels.size()</code> returns <code>size_t</code>, so <code>size</code>
+  becomes <code>size_t</code>.
+</p>
+
+<h4><code>size_t</code></h4>
+<p>
+  An unsigned integer big enough to count anything you could fit in memory. <code>std::vector</code>
+  uses it for sizes and indices. The gotcha: because it's unsigned, <code>0 - 1</code> underflows
+  to a huge number instead of becoming <code>-1</code>.
+</p>
+
+<h4>Structured bindings: <code>auto [a, b] = pair;</code></h4>
+<p>
+  A way to unpack a pair (or tuple, or struct) into named variables in one line.
+  Instead of <code>auto result = splitLeft(...); auto X_left = result.first; auto y_left = result.second;</code>
+  you get <code>auto [X_left, y_left] = splitLeft(...);</code>. Cleaner.
+</p>
+
+<h4>Lambdas: <code>[](const auto&amp; a, const auto&amp; b) { return a.second &lt; b.second; }</code></h4>
+<p>
+  An anonymous function, defined inline. The <code>[]</code> is the <em>capture list</em>
+  (empty here, meaning the lambda doesn't need any surrounding variables). The part in
+  parentheses is the parameter list. The body is after. Used to tell algorithms like
+  <code>max_element</code> how to compare things.
+</p>
+
+<h4><code>static_cast&lt;T&gt;(x)</code></h4>
+<p>
+  An explicit type conversion. <code>static_cast&lt;double&gt;(labels.size())</code>
+  turns a <code>size_t</code> into a <code>double</code> so division doesn't do integer truncation.
+</p>
+
+<h4><code>[[nodiscard]]</code></h4>
+<p>
+  An attribute that tells the compiler: "if someone calls this function and throws the
+  return value away, warn them." Useful on functions whose whole purpose is the return value,
+  like <code>predict</code>.
+</p>
+
+<h4><code>assert(condition &amp;&amp; "message")</code></h4>
+<p>
+  A runtime check: if <code>condition</code> is false, the program aborts with a readable
+  error. The <code>&amp;&amp; "message"</code> trick is a C idiom — a non-empty string is
+  truthy, so the message doesn't change the logic, but it <em>does</em> show up in the error
+  output.
+</p>
+
+<!-- ============================================================= -->
+<h2 id="file">5. The file, top to bottom</h2>
+
+<h3 id="includes">5.1. Includes (lines 1–8)</h3>
+
+<pre><code>#pragma once
+
+#include &lt;vector&gt;
+#include &lt;map&gt;
+#include &lt;memory&gt;
+#include &lt;ranges&gt;
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;</code></pre>
+
+<ul>
+  <li><code>&lt;vector&gt;</code> — <code>std::vector</code>, the workhorse container.</li>
+  <li><code>&lt;map&gt;</code> — <code>std::map</code>, used in <code>gini</code> and <code>leafPrediction</code> for counting.</li>
+  <li><code>&lt;memory&gt;</code> — <code>std::unique_ptr</code> and <code>std::make_unique</code>, for owning <code>Node</code>s.</li>
+  <li><code>&lt;ranges&gt;</code> — gives us <code>std::views::values</code> and <code>std::ranges::sort</code> / <code>unique</code> / <code>max_element</code>.</li>
+  <li><code>&lt;algorithm&gt;</code> — underlying algorithms. The <code>&lt;ranges&gt;</code> versions are thin wrappers around these.</li>
+  <li><code>&lt;cassert&gt;</code> — the <code>assert</code> macro.</li>
+</ul>
+
+<h3 id="class">5.2. The class skeleton</h3>
+
+<pre><code>class DecisionTree {
+private:
+    // Node, SplitResult, members, traverse
+public:
+    // gini, weightedGini, splitLeft, splitRight,
+    // bestSplit, leafPrediction, buildTree,
+    // constructor, fit, predict
+};</code></pre>
+
+<p>
+  <code>private</code> things are internal details — only code inside <code>DecisionTree</code>
+  can touch them. <code>public</code> things are the API — what outside code is allowed to call.
+</p>
+
+<h3 id="node">5.3. The <code>Node</code> struct (lines 12–19)</h3>
+
+<pre><code>struct Node {
+    int feature_index = -1;
+    double threshold = 0.0;
+    double prediction = 0.0;
+    bool is_leaf = false;
+    std::unique_ptr&lt;Node&gt; left_child;
+    std::unique_ptr&lt;Node&gt; right_child;
+};</code></pre>
+
+<p>
+  One <code>Node</code> is one box in the flowchart. It has two personalities:
+</p>
+<ul>
+  <li><strong>Internal node</strong> (<code>is_leaf == false</code>): uses <code>feature_index</code>
+    and <code>threshold</code> to decide which child to visit.
+    <code>prediction</code> is unused.</li>
+  <li><strong>Leaf node</strong> (<code>is_leaf == true</code>): just outputs
+    <code>prediction</code>. <code>feature_index</code>, <code>threshold</code>, and the
+    children are unused.</li>
+</ul>
+
+<p>
+  The <code>= -1</code>, <code>= 0.0</code> etc. are <em>default member initializers</em>.
+  A freshly-made <code>Node</code> starts out with those values; you set them later.
+  The <code>unique_ptr</code>s default-construct to null (no child pointed at), which is
+  exactly what a leaf should have.
+</p>
+
+<h3 id="splitresult">5.4. The <code>SplitResult</code> struct (lines 20–25)</h3>
+
+<pre><code>struct SplitResult {
+    int feature_index = -1;
+    double threshold = 0.0;
+    double score = 1.0;
+    bool valid = false;
+};</code></pre>
+
+<p>
+  While searching for the best question to ask, we need to remember the best candidate
+  seen so far: which feature, which threshold, and how good it was. This is that memo.
+</p>
+
+<ul>
+  <li><code>score</code> starts at <code>1.0</code> because Gini is always between 0 and 1,
+    and lower is better — any real split will beat 1.0.</li>
+  <li><code>valid</code> starts at <code>false</code>: if no real split is ever found
+    (can happen on degenerate data), the caller can detect it.</li>
+</ul>
+
+<h3 id="members">5.5. The instance variables (lines 26–28)</h3>
+
+<pre><code>int max_depth_;
+int min_samples_;
+std::unique_ptr&lt;Node&gt; root_;</code></pre>
+
+<ul>
+  <li><code>max_depth_</code>: hard cap on how deep the tree can grow.
+    If allowed to grow forever, the tree will memorize every training sample (<em>overfitting</em>)
+    and perform poorly on new data.</li>
+  <li><code>min_samples_</code>: if a group has fewer than this many samples, stop splitting —
+    the node becomes a leaf. Prevents silly splits on tiny groups.</li>
+  <li><code>root_</code>: the trained tree. Starts null. After <code>fit()</code>, it holds
+    the actual tree. The trailing underscore is a convention signaling "member variable,"
+    which avoids name clashes with constructor parameters.</li>
+</ul>
+
+<h3 id="traverse">5.6. <code>traverse</code> (lines 30–36)</h3>
+
+<pre><code>static double traverse(const Node* node, const std::vector&lt;double&gt;&amp; sample) {
+    if (node-&gt;is_leaf) return node-&gt;prediction;
+    if (sample[node-&gt;feature_index] &lt;= node-&gt;threshold) {
+        return traverse(node-&gt;left_child.get(), sample);
+    }
+    return traverse(node-&gt;right_child.get(), sample);
+}</code></pre>
+
+<p>
+  Given one sample and a tree (passed as a raw pointer to its current node), walk down
+  the tree and return the leaf's prediction. This is the prediction-time counterpart to
+  <code>buildTree</code>.
+</p>
+
+<p>Step by step:</p>
+<ol>
+  <li>If this node is a leaf, return its prediction — we're done.</li>
+  <li>Otherwise look at feature <code>feature_index</code> of the sample.</li>
+  <li>If that value is &le; the threshold, recurse into the left child.</li>
+  <li>Otherwise recurse into the right child.</li>
+</ol>
+
+<p>
+  <code>.get()</code> on a <code>unique_ptr</code> returns the raw pointer inside (without
+  giving up ownership). We use a raw pointer here because <code>traverse</code> only needs to
+  <em>look</em> at nodes, not own them.
+</p>
+
+<h3 id="gini">5.7. <code>gini</code> (lines 38–49)</h3>
+
+<pre><code>static double gini(const std::vector&lt;double&gt;&amp; labels) {
+    if (labels.empty()) return 0.0;
+    std::map&lt;double,int&gt; unique;
+    for (auto label : labels) unique[label]++;
+    const auto size = static_cast&lt;double&gt;(labels.size());
+    double sum = 0.0;
+    for (const auto val: unique | std::views::values) {
+        const auto p = val / size;
+        sum += p * p;
+    }
+    return 1.0 - sum;
+}</code></pre>
+
+<p>
+  <span class="term">Gini impurity</span> measures how mixed a group of labels is.
+  Formula: <code>1 - Σ pᵢ²</code>, where <code>pᵢ</code> is the fraction of samples in class <code>i</code>.
+</p>
+
+<ul>
+  <li>All one class: <code>p = 1</code>, <code>1 - 1² = 0</code>. Pure.</li>
+  <li>Binary 50/50: two classes at <code>p = 0.5</code>, <code>1 - (0.25 + 0.25) = 0.5</code>. Max mess.</li>
+  <li>Binary 90/10: <code>1 - (0.81 + 0.01) = 0.18</code>. Mostly pure.</li>
+</ul>
+
+<p>Line-by-line:</p>
+<ul>
+  <li><code>if (labels.empty())</code> — guard against 0/0 below.</li>
+  <li><code>std::map&lt;double,int&gt; unique</code> — counter: label → count.</li>
+  <li><code>for (auto label : labels) unique[label]++;</code> — tally. Accessing <code>unique[label]</code>
+    for the first time creates the entry initialized to 0, then <code>++</code> makes it 1.</li>
+  <li><code>static_cast&lt;double&gt;(labels.size())</code> — convert to double so <code>val / size</code>
+    below does floating-point division, not integer division.</li>
+  <li><code>unique | std::views::values</code> — a <em>range view</em>. It gives you just the values
+    of the map (the counts), not the keys. You don't need the label values themselves here,
+    only their counts.</li>
+  <li><code>p = val / size; sum += p * p;</code> — accumulate <code>Σ pᵢ²</code>.</li>
+  <li><code>return 1.0 - sum;</code> — the Gini.</li>
+</ul>
+
+<h3 id="weightedGini">5.8. <code>weightedGini</code> (lines 50–56)</h3>
+
+<pre><code>static double weightedGini(const std::vector&lt;double&gt;&amp; left_labels,
+                           const std::vector&lt;double&gt;&amp; right_labels) {
+    const auto n_total = static_cast&lt;double&gt;(left_labels.size() + right_labels.size());
+    if (n_total == 0) return 0.0;
+    const auto w_left  = static_cast&lt;double&gt;(left_labels.size())  / n_total;
+    const auto w_right = static_cast&lt;double&gt;(right_labels.size()) / n_total;
+    return w_left * gini(left_labels) + w_right * gini(right_labels);
+}</code></pre>
+
+<p>
+  After a split, you have two groups. This function gives the combined impurity of both —
+  but <em>weighted</em> by group size, so a messy group of 500 matters more than a pure
+  group of 2.
+</p>
+
+<div class="callout">
+  <span class="label">Why weighted?</span>
+  If you averaged the two Ginis equally, you'd be tricked: a split that puts 1 sample on
+  one side (trivially pure, gini 0) and 999 mixed samples on the other (gini 0.5) would
+  look as good as splitting 500/500 with gini 0.25 on each. Weighting penalizes lopsided
+  splits properly.
+</div>
+
+<h3 id="splits">5.9. <code>splitLeft</code> and <code>splitRight</code> (lines 57–88)</h3>
+
+<pre><code>static std::pair&lt;std::vector&lt;std::vector&lt;double&gt;&gt;, std::vector&lt;double&gt;&gt;
+splitLeft(const std::vector&lt;std::vector&lt;double&gt;&gt;&amp; X,
+          const std::vector&lt;double&gt;&amp; y,
+          const int feature_index,
+          const double threshold) {
+    std::vector&lt;std::vector&lt;double&gt;&gt; X_out;
+    std::vector&lt;double&gt; y_out;
+    for (int i = 0; i &lt; X.size(); i++) {
+        if (X[i][feature_index] &lt;= threshold) {
+            X_out.push_back(X[i]);
+            y_out.push_back(y[i]);
+        }
+    }
+    return std::make_pair(X_out, y_out);
+}</code></pre>
+
+<p>
+  Given a feature and threshold, walk all the rows. For each row <code>i</code>:
+  if <code>X[i][feature_index] &le; threshold</code>, copy that row (and its matching label)
+  into the output. <code>splitRight</code> is the same but uses <code>&gt;</code>.
+</p>
+
+<div class="callout warn">
+  <span class="label">Critical invariant</span>
+  Every time you push <code>X[i]</code> you <em>must</em> also push <code>y[i]</code>.
+  Lose that pairing and labels no longer match features — total garbage. That's why the
+  function returns a <code>pair</code> of <em>both</em> rather than two separate functions.
+</div>
+
+<p>
+  The return type looks intimidating but it's just "a pair of (rows, labels)."
+  <code>std::make_pair</code> builds that pair.
+</p>
+
+<h3 id="bestSplit">5.10. <code>bestSplit</code> (lines 89–113)</h3>
+
+<p>The heart of training. Try every reasonable question, score each one, return the best.</p>
+
+<pre><code>static SplitResult bestSplit(const std::vector&lt;std::vector&lt;double&gt;&gt;&amp; X,
+                             const std::vector&lt;double&gt;&amp; y) {
+    SplitResult best;
+    if (X.empty() || X[0].empty()) return best;
+    const int n_features = static_cast&lt;int&gt;(X[0].size());
+    for (int j = 0; j &lt; n_features; j++) {
+        std::vector&lt;double&gt; vals;
+        vals.reserve(X.size());
+        for (const auto&amp; row : X) vals.push_back(row[j]);
+        std::ranges::sort(vals);
+        vals.erase(std::ranges::unique(vals).begin(), vals.end());
+        for (size_t k = 0; k + 1 &lt; vals.size(); k++) {
+            const double threshold = (vals[k] + vals[k + 1]) / 2.0;
+            auto [X_left,  y_left]  = splitLeft(X, y, j, threshold);
+            auto [X_right, y_right] = splitRight(X, y, j, threshold);
+            if (y_left.empty() || y_right.empty()) continue;
+            if (const double score = weightedGini(y_left, y_right); score &lt; best.score) {
+                best.feature_index = j;
+                best.threshold = threshold;
+                best.score = score;
+                best.valid = true;
+            }
+        }
+    }
+    return best;
+}</code></pre>
+
+<h4>Outer loop: <code>for each feature j</code></h4>
+<p>
+  <code>X[0].size()</code> gives the number of columns. <code>X.size()</code> would give
+  rows — wrong. Every row has the same width, so we pick the first.
+</p>
+
+<h4>Building candidate thresholds</h4>
+<ol>
+  <li><code>vals</code> collects every value in column <code>j</code>, one per row.
+    <code>reserve(X.size())</code> pre-allocates memory so the <code>push_back</code>s don't
+    keep reallocating.</li>
+  <li><code>std::ranges::sort(vals)</code> — sorts ascending.</li>
+  <li><code>std::ranges::unique(vals)</code> — shuffles duplicates to the end and returns
+    an iterator to the new "logical end." We then <code>erase</code> from that point to the
+    actual end. Classic "erase-remove" idiom. We dedup because splitting between two equal
+    values makes no sense.</li>
+  <li><code>threshold = (vals[k] + vals[k + 1]) / 2.0</code> — the midpoint between two
+    consecutive unique values. Using the midpoint (instead of, say, just <code>vals[k]</code>)
+    puts the threshold between the samples cleanly.</li>
+</ol>
+
+<div class="callout warn">
+  <span class="label">Loop condition gotcha</span>
+  The loop says <code>k + 1 &lt; vals.size()</code>, not <code>k &lt; vals.size() - 1</code>.
+  If <code>vals</code> is empty, <code>vals.size() - 1</code> underflows to a gigantic number
+  and the loop never ends. Writing <code>k + 1 &lt; ...</code> sidesteps that.
+</div>
+
+<h4>Scoring each candidate</h4>
+<ul>
+  <li>Call <code>splitLeft</code> and <code>splitRight</code>, unpack with structured bindings.</li>
+  <li>If either side is empty, this threshold is degenerate — skip it.</li>
+  <li>Compute <code>weightedGini</code>. If it beats the current <code>best.score</code>,
+    save everything including <code>valid = true</code>.</li>
+</ul>
+
+<p>
+  The <code>if (const double score = weightedGini(...); score &lt; best.score)</code> syntax
+  is the <em>init-statement</em> form of <code>if</code>: it defines <code>score</code> inside
+  the <code>if</code>'s scope so you can't accidentally use it outside.
+</p>
+
+<h4>Complexity</h4>
+<p>
+  <strong>O(features × samples × samples)</strong>: up to <code>samples</code> thresholds per
+  feature, each requiring an O(samples) partition. Fine for Titanic. Real libraries sort once
+  and sweep for much better asymptotics; you can add that later.
+</p>
+
+<h3 id="leaf">5.11. <code>leafPrediction</code> (lines 114–120)</h3>
+
+<pre><code>static double leafPrediction(const std::vector&lt;double&gt;&amp; labels) {
+    std::map&lt;double, int&gt; counts;
+    for (const auto label : labels) counts[label]++;
+    const auto winner = std::ranges::max_element(counts,
+        [](const auto&amp; a, const auto&amp; b) { return a.second &lt; b.second; });
+    return winner-&gt;first;
+}</code></pre>
+
+<p>
+  When a node becomes a leaf, we need one label to output. The simplest choice:
+  <strong>majority vote</strong> — whichever class shows up the most among the samples
+  that landed in this leaf.
+</p>
+
+<ul>
+  <li>Same map trick as <code>gini</code> — tally labels.</li>
+  <li><code>std::ranges::max_element(counts, cmp)</code> returns an iterator to the
+    largest entry. The default comparison on <code>pair&lt;K, V&gt;</code> would sort
+    by key (the label value) — wrong. So we pass a lambda that compares by
+    <code>.second</code> (the count).</li>
+  <li>The lambda uses <code>&lt;</code> (less-than) because <code>max_element</code> wants
+    a "strictly less" comparator: the element for which nothing is strictly greater wins.</li>
+  <li><code>winner-&gt;first</code> gives the label (the map's key).</li>
+</ul>
+
+<div class="callout">
+  <span class="label">Tie behavior</span>
+  If two classes are tied, <code>max_element</code> returns the first one encountered.
+  Since <code>std::map</code> iterates in sorted key order, that's the class with the
+  smaller numeric label. It's deterministic — which is what you want.
+</div>
+
+<h3 id="buildTree">5.12. <code>buildTree</code> (lines 121–150)</h3>
+
+<p>
+  The recursive function that grows the tree. Given a slice of data and a depth, it either
+  returns a leaf or returns an internal node whose children are built by recursive calls.
+</p>
+
+<pre><code>static std::unique_ptr&lt;Node&gt; buildTree(
+    const std::vector&lt;std::vector&lt;double&gt;&gt;&amp; X,
+    const std::vector&lt;double&gt;&amp; y,
+    const int depth,
+    const int max_depth,
+    const int min_samples) {
+
+    if (depth &gt;= max_depth
+        || y.size() &lt; static_cast&lt;size_t&gt;(min_samples)
+        || gini(y) == 0.0) {
+        auto leaf = std::make_unique&lt;Node&gt;();
+        leaf-&gt;is_leaf = true;
+        leaf-&gt;prediction = leafPrediction(y);
+        return leaf;
+    }
+    const SplitResult best = bestSplit(X, y);
+    if (!best.valid) {
+        auto leaf = std::make_unique&lt;Node&gt;();
+        leaf-&gt;is_leaf = true;
+        leaf-&gt;prediction = leafPrediction(y);
+        return leaf;
+    }
+    auto [X_left,  y_left]  = splitLeft (X, y, best.feature_index, best.threshold);
+    auto [X_right, y_right] = splitRight(X, y, best.feature_index, best.threshold);
+    auto node = std::make_unique&lt;Node&gt;();
+    node-&gt;feature_index = best.feature_index;
+    node-&gt;threshold     = best.threshold;
+    node-&gt;left_child  = buildTree(X_left,  y_left,  depth + 1, max_depth, min_samples);
+    node-&gt;right_child = buildTree(X_right, y_right, depth + 1, max_depth, min_samples);
+    return node;
+}</code></pre>
+
+<h4>Stopping rules (the three base cases)</h4>
+<ol>
+  <li><code>depth &gt;= max_depth</code> — tree is tall enough; don't grow further.</li>
+  <li><code>y.size() &lt; min_samples</code> — too few rows to justify splitting.
+    Note the <code>static_cast&lt;size_t&gt;(min_samples)</code>: <code>size()</code> is
+    <code>size_t</code>; without the cast, comparing to an <code>int</code> triggers a
+    signed/unsigned warning.</li>
+  <li><code>gini(y) == 0.0</code> — node is already pure. Splitting would do nothing useful.</li>
+</ol>
+
+<p>If any is true: make a leaf. A leaf is a <code>Node</code> with <code>is_leaf = true</code>
+and <code>prediction</code> set to the majority class.</p>
+
+<h4>Fourth base case: no valid split</h4>
+<p>
+  Even if we didn't hit the three above, it's possible that every feature in this slice has
+  only one unique value, so no threshold exists. <code>bestSplit</code> signals this by
+  returning <code>valid = false</code>, and we make a leaf too.
+</p>
+
+<div class="callout warn">
+  <span class="label">Why order matters</span>
+  The three cheap stopping checks happen <em>before</em> we call <code>bestSplit</code>.
+  That's important because <code>bestSplit</code> does <code>X[0].size()</code> — if <code>X</code>
+  is empty, that's undefined behavior. The <code>y.size() &lt; min_samples</code> check
+  (with <code>min_samples &ge; 1</code>) stops us before we get there.
+</div>
+
+<h4>Recursive case</h4>
+<ol>
+  <li>Call <code>splitLeft</code>/<code>splitRight</code> with the best split to partition the data.</li>
+  <li>Build a new internal <code>Node</code>. Set <code>feature_index</code> and <code>threshold</code>
+    so <code>traverse</code> can route samples later. Leave <code>is_leaf = false</code> (default).</li>
+  <li>Grow the left subtree recursively and attach it to <code>node-&gt;left_child</code>.</li>
+  <li>Grow the right subtree and attach it to <code>node-&gt;right_child</code>.</li>
+  <li>Return the finished node up to the caller.</li>
+</ol>
+
+<p>
+  Because the two children call <code>buildTree</code> with smaller data and one-deeper depth,
+  the recursion always terminates — at worst, <code>depth</code> reaches <code>max_depth</code>
+  and everything becomes a leaf.
+</p>
+
+<h3 id="ctor">5.13. Constructor (lines 151–152)</h3>
+
+<pre><code>explicit DecisionTree(const int max_depth = 5, const int min_samples = 2)
+    : max_depth_(max_depth), min_samples_(min_samples) {}</code></pre>
+
+<ul>
+  <li><strong><code>explicit</code></strong>: prevents implicit conversion. Without it,
+    a stray <code>DecisionTree t = 7;</code> would quietly create a tree with <code>max_depth = 7</code>.
+    With <code>explicit</code>, you must write <code>DecisionTree t(7);</code>. Safer.</li>
+  <li><strong>Default arguments</strong>: <code>= 5</code> and <code>= 2</code> mean
+    <code>DecisionTree t;</code> works with no arguments and you get reasonable defaults.</li>
+  <li><strong>Member initializer list</strong>: the <code>: max_depth_(max_depth), ...</code>
+    part sets the members <em>directly</em> instead of assigning inside <code>{}</code>.
+    For <code>int</code> it's cosmetic. For class-type members it's the idiomatic way and can
+    avoid an unnecessary default-construct-then-overwrite.</li>
+  <li><code>root_</code> isn't in the initializer list — <code>unique_ptr</code> defaults
+    to null, which is exactly what "untrained" should look like.</li>
+  <li>Empty <code>{}</code> body: nothing else to do.</li>
+</ul>
+
+<h3 id="fit">5.14. <code>fit</code> (lines 153–155)</h3>
+
+<pre><code>void fit(const std::vector&lt;std::vector&lt;double&gt;&gt;&amp; X,
+         const std::vector&lt;double&gt;&amp; y) {
+    root_ = buildTree(X, y, 0, max_depth_, min_samples_);
+}</code></pre>
+
+<p>
+  The public "train me" function. Delegates all work to <code>buildTree</code>, passing
+  depth 0 (we're starting at the root) and the instance's <code>max_depth_</code> and
+  <code>min_samples_</code>. The returned <code>unique_ptr&lt;Node&gt;</code> is moved into
+  <code>root_</code>, which then owns the entire tree.
+</p>
+
+<h3 id="predict">5.15. <code>predict</code> (lines 156–159)</h3>
+
+<pre><code>[[nodiscard]] double predict(const std::vector&lt;double&gt;&amp; sample) const {
+    assert(root_ != nullptr &amp;&amp; "DecisionTree is not fitted yet.");
+    return traverse(root_.get(), sample);
+}</code></pre>
+
+<ul>
+  <li><code>[[nodiscard]]</code>: warn if someone throws the return away.</li>
+  <li><code>const</code> after the parameter list: this method doesn't modify any member
+    variables. Lets you call <code>predict</code> on a <code>const DecisionTree</code>.</li>
+  <li><code>assert(root_ != nullptr &amp;&amp; "…")</code>: crash with a clear message if
+    someone calls <code>predict</code> before <code>fit</code>. In release builds, <code>assert</code>
+    is compiled out, so there's no runtime cost in production.</li>
+  <li><code>root_.get()</code>: get the raw <code>Node*</code> inside the <code>unique_ptr</code>,
+    without transferring ownership. <code>traverse</code> only needs to look.</li>
+</ul>
+
+<!-- ============================================================= -->
+<h2 id="lifecycle">6. Life of a prediction</h2>
+
+<p>Let's trace the whole system on a tiny dataset.</p>
+
+<h3>Input</h3>
+
+<pre><code>// two features: [age, is_first_class]
+// label: survived (0 or 1)
+std::vector&lt;std::vector&lt;double&gt;&gt; X = {
+    {22, 0}, {38, 1}, {26, 0}, {35, 1}, {8, 0}, {54, 1}
+};
+std::vector&lt;double&gt; y = { 0, 1, 1, 1, 0, 0 };
+
+DecisionTree tree(3, 2);  // max_depth = 3, min_samples = 2
+tree.fit(X, y);</code></pre>
+
+<h3>Step 1: <code>fit</code> calls <code>buildTree(X, y, 0, 3, 2)</code></h3>
+<ul>
+  <li>depth (0) &lt; max_depth (3) ✓</li>
+  <li>y.size() (6) ≥ min_samples (2) ✓</li>
+  <li>gini(y) on <code>{0,1,1,1,0,0}</code>: 3 zeros, 3 ones → <code>1 - (0.25+0.25) = 0.5</code>. Not pure ✓</li>
+  <li>Call <code>bestSplit(X, y)</code>.</li>
+</ul>
+
+<h3>Step 2: <code>bestSplit</code> tries every question</h3>
+
+<p>Feature 0 (age): unique sorted values = [8, 22, 26, 35, 38, 54]. Midpoints:
+[15, 24, 30.5, 36.5, 46].</p>
+<p>Feature 1 (is_first_class): unique sorted values = [0, 1]. Midpoint: [0.5].</p>
+
+<p>For each midpoint, split and score:</p>
+
+<table>
+<thead><tr><th>feature</th><th>threshold</th><th>left labels</th><th>right labels</th><th>weighted gini</th></tr></thead>
+<tbody>
+<tr><td>age</td><td>15</td><td>{0}</td><td>{0,1,1,1,0}</td><td>1/6·0 + 5/6·(1-(0.4²+0.6²)) = 0.40</td></tr>
+<tr><td>age</td><td>24</td><td>{0,0}</td><td>{1,1,1,0}</td><td>2/6·0 + 4/6·(1-(0.25²+0.75²))= 0.25</td></tr>
+<tr><td>age</td><td>30.5</td><td>{0,1,0}</td><td>{1,1,0}</td><td>3/6·(0.44) + 3/6·(0.44) = 0.44</td></tr>
+<tr><td>…</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+<tr><td>is_first_class</td><td>0.5</td><td>{0,1,0}</td><td>{1,1,0}</td><td>3/6·(0.44)+3/6·(0.44)=0.44</td></tr>
+</tbody>
+</table>
+
+<p>
+  The winner on this toy data is <strong>age ≤ 24</strong> with score ≈ 0.25. <code>bestSplit</code>
+  returns <code>{feature_index=0, threshold=24, score=0.25, valid=true}</code>.
+</p>
+
+<h3>Step 3: <code>buildTree</code> partitions and recurses</h3>
+
+<ul>
+  <li>left slice: <code>{(22,0), (8,0)}</code>, labels <code>{0, 0}</code></li>
+  <li>right slice: <code>{(38,1), (26,0), (35,1), (54,1)}</code>, labels <code>{1,1,1,0}</code></li>
+</ul>
+
+<p>Root becomes an internal node: <code>feature_index=0, threshold=24</code>. Recurse into children at depth 1.</p>
+
+<h4>Left child: <code>buildTree({(22,0),(8,0)}, {0,0}, 1, 3, 2)</code></h4>
+<ul>
+  <li>gini({0,0}) = 0 → pure → make a leaf with <code>prediction = leafPrediction({0,0}) = 0</code>.</li>
+</ul>
+
+<h4>Right child: <code>buildTree({(38,1),(26,0),(35,1),(54,1)}, {1,1,1,0}, 1, 3, 2)</code></h4>
+<ul>
+  <li>Not at max_depth. 4 samples ≥ min_samples. gini = 1-(0.25²+0.75²)=0.375.</li>
+  <li>Calls <code>bestSplit</code> again → finds some splitting question on age or class → builds deeper nodes.</li>
+</ul>
+
+<h3>Step 4: prediction</h3>
+<p>Call <code>tree.predict({30, 1})</code>.</p>
+
+<ol>
+  <li><code>traverse(root, {30, 1})</code>. Root is internal. feature_index=0, threshold=24.
+    sample[0] = 30. 30 ≤ 24? No. Go right.</li>
+  <li>Recurse into the right subtree's root. Whatever question it asks (maybe "is_first_class ≤ 0.5?"),
+    evaluate and pick left/right.</li>
+  <li>Keep going until you hit a leaf. Return <code>leaf-&gt;prediction</code>.</li>
+</ol>
+
+<p>That's the entire lifecycle. Construct, fit, predict.</p>
+
+<!-- ============================================================= -->
+<h2 id="glossary">7. Glossary</h2>
+
+<dl>
+  <dt><strong>Class / class label</strong></dt>
+  <dd>The category a sample belongs to. For Titanic: 0 (died) or 1 (survived).</dd>
+
+  <dt><strong>Feature</strong></dt>
+  <dd>One column of <code>X</code>. A numeric attribute of a sample.</dd>
+
+  <dt><strong>Gini impurity</strong></dt>
+  <dd><code>1 - Σ pᵢ²</code> where <code>pᵢ</code> is the fraction of samples in class <code>i</code>.
+      0 means pure, higher means more mixed.</dd>
+
+  <dt><strong>Greedy algorithm</strong></dt>
+  <dd>An algorithm that makes the locally best choice at each step without looking ahead.
+      Tree building is greedy: at each node we pick the split with the best immediate Gini
+      improvement.</dd>
+
+  <dt><strong>Impurity</strong></dt>
+  <dd>Any measure of how mixed-up a group's labels are. Gini is one such measure; there
+      are others (entropy, classification error) but this file uses Gini.</dd>
+
+  <dt><strong>Label / target / y</strong></dt>
+  <dd>The value we want to predict. One per sample.</dd>
+
+  <dt><strong>Leaf</strong></dt>
+  <dd>A tree node that has no children and outputs a fixed prediction.</dd>
+
+  <dt><strong>Node</strong></dt>
+  <dd>One box in the tree. Either internal (has a question and two children) or a leaf.</dd>
+
+  <dt><strong>Overfitting</strong></dt>
+  <dd>When a model learns the training data so specifically that it fails on new data.
+      Very deep trees overfit; <code>max_depth</code> and <code>min_samples</code> fight this.</dd>
+
+  <dt><strong>Prediction / inference</strong></dt>
+  <dd>Using a trained model to produce a label for a new sample.</dd>
+
+  <dt><strong>Recursion</strong></dt>
+  <dd>A function that calls itself. <code>buildTree</code> recurses into its own left and
+      right subtrees. <code>traverse</code> recurses down the tree during prediction.</dd>
+
+  <dt><strong>Root</strong></dt>
+  <dd>The top node of the tree. Every prediction starts there.</dd>
+
+  <dt><strong>Sample / row / observation</strong></dt>
+  <dd>One example. One row of <code>X</code> with its corresponding label in <code>y</code>.</dd>
+
+  <dt><strong>Split</strong></dt>
+  <dd>Partitioning a group of samples into two based on a (feature, threshold) pair.</dd>
+
+  <dt><strong>Threshold</strong></dt>
+  <dd>The numeric cutoff in a split's question.</dd>
+
+  <dt><strong>Training / fitting</strong></dt>
+  <dd>The process of learning the tree from labeled data. Done by <code>fit()</code>.</dd>
+
+  <dt><strong>Weighted Gini</strong></dt>
+  <dd>The combined Gini of two split groups, weighted by their sizes. The score we minimize
+      when searching for the best split.</dd>
+</dl>
+
+<p style="margin-top: 60px; color: var(--ink-dim); font-size: 0.9em; text-align: center;">
+  — end of walkthrough —
+</p>
+
+</body>
+</html>
